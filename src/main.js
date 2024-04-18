@@ -16,6 +16,7 @@ const simpleLightbox = new SimpleLightbox('.gallery a', {
 const form = document.querySelector('form');
 const gallery = document.querySelector('.gallery');
 const loader = document.querySelector('#animation');
+const loadBtn = document.querySelector('js-loade-more');
 
 form.addEventListener('submit', handleSubmit);
 
