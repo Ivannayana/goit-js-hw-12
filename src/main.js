@@ -1,88 +1,93 @@
+import iziToast from 'izitoast';
+import 'izitoast/dist/css/iziToast.min.css';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
+import { createMarkup } from './js/render-functions';
+import { fetchRequest } from './js/pixabay-api';
 
-import { fetchImages } from './js/pixabay-api';
-
-import {
-  renderMarcup,
-  showEndOfListMessage,
-  showEmptyInputMessage,
-  noImagesMessage,
-} from './js/render-functions.js';
-
-const lightbox = new SimpleLightbox('.gallery a', {
-  nav: true,
-  captions: true,
+const simpleLightbox = new SimpleLightbox('.gallery a', {
   captionsData: 'alt',
-  captionDelay: 150,
+  captionPosition: 'bottom',
+  captionDelay: 250,
 });
 
-const form = document.querySelector('.search-form');
-const container = document.querySelector('.gallery');
-const loader = document.querySelector('.loader');
-const loadMoreBtn = document.querySelector('.load-btn');
-let searchWord = '';
-let currPage;
+const form = document.querySelector('form');
+const gallery = document.querySelector('.gallery');
+const loader = document.querySelector('#animation');
+const loadMore = document.querySelector('.load-btn');
+let page = 1;
+let request = null;
+let lastPage;
 
-form.addEventListener('submit', onSubmit);
-loadMoreBtn.addEventListener('click', onLoadMore);
+form.addEventListener('submit', handleSubmit);
+loadMore.addEventListener('click', handleClick);
 
-async function onSubmit(event) {
-  currPage = 1;
+async function handleSubmit(event) {
   event.preventDefault();
-  container.innerHTML = '';
-  searchWord = form.elements.searchWord.value.trim();
-  loadMoreBtn.style.display = 'block';
+  loadMore.classList.add('hidden');
+  loader.classList.toggle('loader');
+  gallery.innerHTML = '';
+  page = 1;
 
-  if (searchWord === '') {
-    showEmptyInputMessage();
-    container.innerHTML = '';
-    loadMoreBtn.style.display = 'none';
-    form.reset();
+  request = event.target.elements.text.value.trim();
+  if (!request) {
+    loader.classList.toggle('loader');
     return;
   }
-  loader.style.display = 'block';
-
   try {
-    const images = await fetchImages(searchWord, currPage).then(data => {
-      const marcup = renderMarcup(data);
-      if (data.hits.length === 0) {
-        noImagesMessage();
-        loadMoreBtn.style.display = 'none';
-        loader.style.display = 'none';
-        return;
+    const response = await fetchRequest(request);
+
+    if (response.hits.length === 0) {
+      iziToast.error({
+        message:
+          'Sorry, there are no images matching your search query. Please try again!',
+      });
+    } else {
+      gallery.innerHTML = createMarkup(response.hits);
+      simpleLightbox.refresh();
+
+      lastPage = Math.ceil(response.totalHits / 15);
+      if (lastPage > 1) {
+        loadMore.classList.remove('hidden');
       }
-      container.insertAdjacentHTML('beforeend', marcup);
-      lightbox.refresh();
-      loader.style.display = 'none';
-    });
+    }
   } catch (error) {
-    console.error('Error:', error);
+    console.log(error);
+  } finally {
+    loader.classList.toggle('loader');
+    form.reset();
   }
-  form.reset();
 }
 
-async function onLoadMore() {
-  currPage += 1;
+async function handleClick() {
+  loader.classList.toggle('loader');
+
+  page += 1;
+
   try {
-    const images = await fetchImages(searchWord, currPage).then(data => {
-      const marcup = renderMarcup(data);
-      container.insertAdjacentHTML('beforeend', marcup);
-      lightbox.refresh();
+    const response = await fetchRequest(request, page);
+    gallery.insertAdjacentHTML('beforeend', createMarkup(response.hits));
+    simpleLightbox.refresh();
 
-      const cardHeight = container.getBoundingClientRect().height;
-      window.scrollBy({
-        top: 2 * cardHeight,
-        behavior: 'smooth',
-      });
+    const { height: cardHeight } = document
+      .querySelector('.gallery')
+      .firstElementChild.getBoundingClientRect();
 
-      if (data.hits.length <= 14) {
-        loadMoreBtn.style.display = 'none';
-        showEndOfListMessage();
-        lightbox.refresh();
-      }
+    window.scrollBy({
+      top: cardHeight * 2,
+      left: 0,
+      behavior: 'smooth',
     });
+
+    if (lastPage === page) {
+      loadMore.classList.add('hidden');
+      iziToast.info({
+        message: 'We are sorry, but you have reached the end of search results',
+      });
+    }
   } catch (error) {
-    console.error('Error:', error);
+    console.log(error);
+  } finally {
+    loader.classList.toggle('loader');
   }
 }
